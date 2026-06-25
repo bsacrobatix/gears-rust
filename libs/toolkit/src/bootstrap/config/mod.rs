@@ -2893,6 +2893,31 @@ vendor:
     }
 
     #[test]
+    fn test_gear_config_env_override_dashed_name() {
+        let tmp = tempdir().unwrap();
+        let cfg_path = tmp.path().join("cfg.yaml");
+        let yaml = r#"
+server:
+  home_dir: "~/.test_gear_dashed"
+gears:
+  static-authz-plugin:
+    config:
+      priority: 10
+"#;
+        fs::write(&cfg_path, yaml).unwrap();
+
+        with_var(
+            "APP__GEARS__STATIC_AUTHZ_PLUGIN__CONFIG__PRIORITY",
+            Some("50"),
+            || {
+                let config = AppConfig::load_layered(&cfg_path).unwrap();
+                let gear = &config.gears["static-authz-plugin"];
+                assert_eq!(gear["config"]["priority"], serde_json::json!(50));
+            },
+        );
+    }
+
+    #[test]
     fn test_vendor_multiple_vendors_typed_access() {
         let mut config = AppConfig::default();
         config.vendor.insert(
