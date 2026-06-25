@@ -9,6 +9,7 @@ use anyhow::{Context, Result, ensure};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::env;
 use std::path::{Path, PathBuf};
 pub use toolkit_db::{DbConnConfig, GlobalDatabaseConfig, PoolCfg};
 use tracing::Level;
@@ -312,17 +313,20 @@ impl AppConfig {
     pub fn load_layered(config_path: &PathBuf) -> Result<Self> {
         use figment::{
             Figment,
-            providers::{Env, Format, Serialized},
+            providers::{Format, Serialized},
         };
 
         // For layered loading, start from AppConfig::default() which provides logging
         // defaults (via default_logging_config()); other optional sections (database,
         // tracing, gears_dir) remain None unless overridden by YAML/ENV.
+        let env_layer = remap_prefixed_app_env("APP__");
         let figment = Figment::new()
             .merge(Serialized::defaults(AppConfig::default()))
             .merge(StrictYaml::file(config_path))
-            // Example: APP__SERVER__PORT=8087 maps to server.port
-            .merge(Env::prefixed("APP__").split("__"));
+            // Example: APP__SERVER__PORT=8087 maps to server.port.
+            // APP__GEARS__STATIC_AUTHZ_PLUGIN__CONFIG__PRIORITY maps to
+            // gears.static-authz-plugin.config.priority.
+            .merge(Serialized::from(env_layer, "default"));
 
         let mut config: AppConfig = figment
             .extract()
@@ -421,6 +425,71 @@ impl AppConfig {
                 _ => Some(Level::TRACE),
             };
         }
+    }
+}
+
+fn remap_prefixed_app_env(prefix: &str) -> serde_json::Value {
+    let mut root = serde_json::Map::new();
+
+    for (raw_key, raw_value) in env::vars() {
+        let suffix = match raw_key.strip_prefix(prefix) {
+            Some(suffix) => suffix,
+            None => continue,
+        };
+
+        let mut segments: Vec<String> = suffix
+            .split("__")
+            .map(|segment| segment.to_ascii_lowercase())
+            .collect();
+
+        if segments.is_empty() {
+            continue;
+        }
+
+        if segments.first().is_some_and(|segment| segment == "gears") && segments.len() > 1 {
+            segments[1] = segments[1].replace('_', "-");
+        }
+
+        let value = serde_json::from_str(&raw_value).unwrap_or_else(|_| serde_json::Value::String(raw_value));
+        insert_env_override(&mut root, &segments, value);
+    }
+
+    serde_json::Value::Object(root)
+}
+
+fn insert_env_override(
+    root: &mut serde_json::Map<String, serde_json::Value>,
+    path: &[String],
+    value: serde_json::Value,
+) {
+    let (head, tail) = match path.split_first() {
+        Some(split) => split,
+        None => return,
+    };
+
+    if tail.is_empty() {
+        root.insert(head.to_owned(), value);
+        return;
+    }
+
+    let child = match root.get_mut(head) {
+        Some(current) => {
+            if !current.is_object() {
+                *current = serde_json::Value::Object(serde_json::Map::new());
+            }
+            current
+        }
+        None => {
+            root.insert(
+                head.to_owned(),
+                serde_json::Value::Object(serde_json::Map::new()),
+            );
+            root.get_mut(head).expect("inserted map entry")
+        }
+    };
+
+    if let Some(child_map) = child.as_object_mut() {
+        insert_env_override(child_map, tail, value);
     }
 }
 
