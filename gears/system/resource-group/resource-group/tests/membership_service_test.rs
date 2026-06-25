@@ -32,7 +32,7 @@ async fn create_type_with_memberships(
     memberships: &[&str],
 ) -> resource_group_sdk::ResourceGroupType {
     let code = format!(
-        "gts.cf.core.rg.type.v1~x.test.{}{}.v1~",
+        "gts.cf.core.rg.type.v1~x.test.{}.i{}.v1~",
         suffix,
         Uuid::now_v7().as_simple()
     );

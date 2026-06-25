@@ -51,8 +51,8 @@ impl<TR: TypeRepositoryTrait> TypeService<TR> {
     ) -> Result<ResourceGroupType, DomainError> {
         // Pre-validation (pure, no DB) — runs outside the transaction.
         // @cpt-begin:cpt-cf-resource-group-flow-type-mgmt-create-type:p1:inst-create-type-2
-        // Validate GTS type path format via `GtsTypePath` value object.
-        validation::validate_type_code(&req.code)?;
+        // Validate GTS type path format without requiring the RG type prefix.
+        validation::validate_membership_type_code(&req.code)?;
         // @cpt-end:cpt-cf-resource-group-flow-type-mgmt-create-type:p1:inst-create-type-2
         // @cpt-begin:cpt-cf-resource-group-flow-type-mgmt-create-type:p1:inst-create-type-3
         // Validate placement invariant: `can_be_root OR len(allowed_parent_types) >= 1`.
@@ -218,6 +218,7 @@ impl<TR: TypeRepositoryTrait> TypeService<TR> {
         req: UpdateTypeRequest,
     ) -> Result<ResourceGroupType, DomainError> {
         // Pre-validation (pure, no DB) — runs outside the transaction.
+        validation::validate_membership_type_code(code)?;
         // @cpt-begin:cpt-cf-resource-group-flow-type-mgmt-update-type:p1:inst-update-type-4
         // Validate placement invariant on new values.
         Self::validate_placement_invariant(req.can_be_root, &req.allowed_parent_types)?;

@@ -64,6 +64,16 @@ pub fn validate_type_code(code: &str) -> Result<(), DomainError> {
 /// Returns [`DomainError::validation`] if the code is not a valid GTS
 /// ID, or if it is a wildcard pattern.
 pub fn validate_membership_type_code(code: &str) -> Result<(), DomainError> {
+    if code.trim().to_lowercase().starts_with(RG_TYPE_PREFIX) {
+        validate_type_code(code)?;
+        if code.contains('*') {
+            return Err(DomainError::validation(format!(
+                "Membership type code '{code}' must be a concrete GTS type, not a wildcard pattern"
+            )));
+        }
+        return Ok(());
+    }
+
     let parsed = gts::GtsID::new(code).map_err(|e| {
         DomainError::validation(format!("Invalid membership type code '{code}': {e}"))
     })?;
