@@ -131,9 +131,14 @@ async fn external_membership_type_can_be_registered_and_used_end_to_end() {
 
     let group_type =
         create_type_with_memberships(&type_svc, "externalmbr", &[external_member_type]).await;
-    let group =
-        common::create_root_group(&group_svc, &ctx, &group_type.code, "External Members", tenant)
-            .await;
+    let group = common::create_root_group(
+        &group_svc,
+        &ctx,
+        &group_type.code,
+        "External Members",
+        tenant,
+    )
+    .await;
 
     let membership = mbr_svc
         .add_membership(&ctx, group.id, external_member_type, "user-001")

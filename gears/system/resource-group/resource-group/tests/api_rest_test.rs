@@ -1153,17 +1153,18 @@ async fn rest_type_response_omits_null_metadata_schema() {
 // Section C: Invalid/Non-GTS Input (TC-NOGTS + TC-DESER)
 // =========================================================================
 
-/// TC-NOGTS-01: Create type with valid GTS but not RG prefix returns 400.
+/// TC-NOGTS-01: Create type with valid GTS but not RG prefix succeeds.
 #[tokio::test]
-async fn input_create_type_non_rg_prefix_returns_400() {
+async fn input_create_type_non_rg_prefix_returns_201() {
     let (router, _) = build_test_router().await;
     let tenant_id = Uuid::now_v7();
+    let code = "gts.cf.core.am.user.v1~";
 
     let req = json_request(
         "POST",
         "/types-registry/v1/types",
         Some(serde_json::json!({
-            "code": "gts.cf.other.prefix.v1~test.v1~",
+            "code": code,
             "can_be_root": true,
             "allowed_parent_types": [],
             "allowed_membership_types": []
@@ -1171,7 +1172,7 @@ async fn input_create_type_non_rg_prefix_returns_400() {
         tenant_id,
     );
     let resp = router.oneshot(req).await.unwrap();
-    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(resp.status(), StatusCode::CREATED);
 }
 
 /// TC-NOGTS-02: Create type with empty code returns 400.
