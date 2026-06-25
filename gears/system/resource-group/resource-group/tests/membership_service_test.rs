@@ -91,6 +91,60 @@ async fn membership_add_happy_path() {
     assert_eq!(rows[0].resource_id, "res-001");
 }
 
+#[tokio::test]
+async fn external_membership_type_can_be_registered_and_used_end_to_end() {
+    let db = test_db().await;
+    let type_svc = TypeService::new(db.clone(), Arc::new(TypeRepository));
+    let group_svc = make_group_service(db.clone());
+    let mbr_svc = make_membership_service(db.clone());
+
+    let tenant = Uuid::now_v7();
+    let ctx = make_ctx(tenant);
+    let external_member_type = "gts.cf.core.am.user.v1~";
+
+    let registered_member_type = type_svc
+        .create_type(CreateTypeRequest {
+            code: external_member_type.to_owned(),
+            can_be_root: true,
+            allowed_parent_types: vec![],
+            allowed_membership_types: vec![],
+            metadata_schema: None,
+        })
+        .await
+        .expect("external bare GTS membership type should register");
+    assert_eq!(registered_member_type.code, external_member_type);
+
+    let empty_code_err = type_svc
+        .create_type(CreateTypeRequest {
+            code: String::new(),
+            can_be_root: true,
+            allowed_parent_types: vec![],
+            allowed_membership_types: vec![],
+            metadata_schema: None,
+        })
+        .await
+        .expect_err("empty type code should still be rejected");
+    assert!(
+        matches!(empty_code_err, DomainError::Validation { .. }),
+        "expected empty code to fail validation, got: {empty_code_err:?}"
+    );
+
+    let group_type =
+        create_type_with_memberships(&type_svc, "externalmbr", &[external_member_type]).await;
+    let group =
+        common::create_root_group(&group_svc, &ctx, &group_type.code, "External Members", tenant)
+            .await;
+
+    let membership = mbr_svc
+        .add_membership(&ctx, group.id, external_member_type, "user-001")
+        .await
+        .expect("registered external membership type should be accepted end-to-end");
+
+    assert_eq!(membership.group_id, group.id);
+    assert_eq!(membership.resource_type, external_member_type);
+    assert_eq!(membership.resource_id, "user-001");
+}
+
 // TC-MBR-02: Add to nonexistent group
 #[tokio::test]
 async fn membership_add_nonexistent_group() {
