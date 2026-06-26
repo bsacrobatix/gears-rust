@@ -162,6 +162,42 @@ async fn type_create_nonexistent_memberships() {
     );
 }
 
+#[tokio::test]
+async fn type_create_accepts_external_gts_code_and_rejects_empty_code() {
+    let db = common::test_db().await;
+    let type_svc = TypeService::new(db.clone(), Arc::new(TypeRepository));
+
+    let external_code = "gts.cf.core.am.user.v1~".to_owned();
+    let created = type_svc
+        .create_type(CreateTypeRequest {
+            code: external_code.clone(),
+            can_be_root: true,
+            allowed_parent_types: vec![],
+            allowed_membership_types: vec![],
+            metadata_schema: None,
+        })
+        .await
+        .expect("external non-RG GTS type code should be registered");
+
+    assert_eq!(created.code, external_code);
+
+    let empty_code_err = type_svc
+        .create_type(CreateTypeRequest {
+            code: String::new(),
+            can_be_root: true,
+            allowed_parent_types: vec![],
+            allowed_membership_types: vec![],
+            metadata_schema: None,
+        })
+        .await
+        .expect_err("empty type code should still be rejected");
+
+    assert!(
+        matches!(empty_code_err, DomainError::Validation { .. }),
+        "expected validation error for empty type code, got {empty_code_err:?}"
+    );
+}
+
 /// TC-TYP-04: Placement invariant: can_be_root=false, allowed_parent_types=[] -> Validation error.
 #[tokio::test]
 async fn type_create_placement_invariant_violation() {
